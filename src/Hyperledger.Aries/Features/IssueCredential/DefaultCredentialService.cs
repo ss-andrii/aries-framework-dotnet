@@ -25,6 +25,7 @@ using Hyperledger.Aries.Storage;
 using Hyperledger.Indy;
 using Polly;
 using Hyperledger.Aries.Features.PresentProof;
+using Hyperledger.Aries.Features.IssueCredential.Models;
 
 namespace Hyperledger.Aries.Features.IssueCredential
 {
@@ -389,6 +390,7 @@ namespace Hyperledger.Aries.Features.IssueCredential
             var credentialJobj = JObject.Parse(credentialJson);
             var definitionId = credentialJobj["cred_def_id"].ToObject<string>();
             var revRegId = credentialJobj["rev_reg_id"]?.ToObject<string>();
+            var values = credentialJobj["values"].ToObject<Dictionary<string, CredentialAttributeValue>>();
 
             var credentialRecord = await Policy.Handle<AriesFrameworkException>()
                 .RetryAsync(3, async (ex, retry) => { await Task.Delay((int)Math.Pow(retry, 2) * 100); })
@@ -418,6 +420,14 @@ namespace Hyperledger.Aries.Features.IssueCredential
                 revRegDefJson: revocationRegistryDefinitionJson);
 
             credentialRecord.CredentialId = credentialId;
+
+            credentialRecord.CredentialAttributesValues = values.Select(x => new CredentialPreviewAttribute
+            {
+                Name = x.Key,
+                Value = x.Value.Raw,
+                MimeType = CredentialMimeTypes.TextMimeType
+            }).ToList();
+
             await credentialRecord.TriggerAsync(CredentialTrigger.Issue);
             await RecordService.UpdateAsync(agentContext.Wallet, credentialRecord);
             EventAggregator.Publish(new ServiceMessageProcessingEvent
